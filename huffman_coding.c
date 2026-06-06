@@ -1,37 +1,62 @@
 #include "huffman.h"
+#include "comprime.h"
 
 int main() {
-    // 1. Dicionário inicial
-    char componentes[] = "abr";
-    int freq[] = {2, 1, 1};
-    int n = strlen(componentes);
+    const char *nome_original = "entrada.txt";
+    const char *nome_comprimido = "saida.huff";
 
-    int ans_size = 0;
-    char** codigos = huffmanCodes(componentes, freq, n, &ans_size);
-
-    printf("--- Dicionario Huffman ---\n");
-    for(int i = 0; i < ans_size; i++) {
-        printf("Letra '%c' -> Codigo: %s\n", componentes[i], codigos[i]);
+    // ==========================================================
+    // PASSO 0: Criar um arquivo de teste (Apenas para demonstração)
+    // ==========================================================
+    FILE *teste = fopen(nome_original, "w");
+    if (teste) {
+        for(int i=0; i<100; i++) {
+            fprintf(teste, "A compressao de Huffman funciona incrivelmente bem para arquivos grandes que possuem muitas repeticoes de letras! ");
+        }
+        fclose(teste);
     }
-    printf("--------------------------\n\n");
 
-    // 2. String alvo
-    char string_alvo[] = "abra";
-    printf("Texto Original     : %s\n", string_alvo);
-
-    // 3. Codificando
-    char* resultado_binario = codificarString(string_alvo, componentes, codigos, n);
-    printf("Texto Codificado   : %s\n", resultado_binario);
-
-    // 4. Decodificando
-    char* resultado_decodificado = decodificarString(resultado_binario, componentes, codigos, n);
-    printf("Texto Decodificado : %s\n", resultado_decodificado);
-
-    // 5. Limpeza de Memória
-    free(resultado_binario);
-    free(resultado_decodificado); // Nova liberação!
-    for (int i = 0; i < ans_size; i++) {
-        free(codigos[i]);
+    // ==========================================================
+    // PASSO 1: Mapear o Arquivo (Contar frequências)
+    // ==========================================================
+    int frequencias[256];
+    if (!calcularFrequencias(nome_original, frequencias)) {
+        return 1; // Falhou ao ler o arquivo
     }
-    free(codigos);
+
+    // ==========================================================
+    // PASSO 2: Construir a Árvore e o Dicionário
+    // ==========================================================
+    char **dicionario = construirDicionario(frequencias);
+    if (dicionario == NULL) {
+        printf("Arquivo vazio ou erro ao construir dicionario.\n");
+        return 1;
+    }
+
+    // (Opcional) Visualizar alguns códigos gerados
+    printf("--- Alguns codigos gerados ---\n");
+    if(dicionario['A'] != NULL) printf("Letra 'A': %s\n", dicionario['A']);
+    if(dicionario['a'] != NULL) printf("Letra 'a': %s\n", dicionario['a']);
+    if(dicionario[' '] != NULL) printf("Espaco   : %s\n", dicionario[' ']);
+    printf("------------------------------\n");
+
+    // ==========================================================
+    // PASSO 3: Comprimir de Fato!
+    // ==========================================================
+    printf("Comprimindo arquivo...\n");
+    if (comprimirArquivo(nome_original, nome_comprimido, dicionario, frequencias)) {
+        printf("Sucesso! Arquivo comprimido gerado: %s\n", nome_comprimido);
+    }
+
+    // ==========================================================
+    // PASSO 4: Limpeza de Memória
+    // ==========================================================
+    for (int i = 0; i < 256; i++) {
+        if (dicionario[i] != NULL) {
+            free(dicionario[i]);
+        }
+    }
+    free(dicionario);
+
+    return 0;
 }

@@ -14,3 +14,6 @@ typedef struct {
 EscritorDeBits* criarEscritor(FILE *arq);
 void escreverCodigo(EscritorDeBits *escritor, const char *codigo_huffman);
 void finalizarEscritor(EscritorDeBits *escritor);
+int calcularFrequencias(const char *nome_arquivo, int *frequencias);
+char** construirDicionario(int *frequencias);
+int comprimirArquivo(const char *arquivo_entrada, const char *arquivo_saida, char **dicionario, int *frequencias);

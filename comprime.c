@@ -180,3 +180,50 @@ char** construirDicionario(int *frequencias) {
 
     return ans;
 }
+
+// Lê o arquivo original e gera a versão comprimida (.huff)
+int comprimirArquivo(const char *arquivo_entrada, const char *arquivo_saida, char **dicionario, int *frequencias) {
+    // 1. Abre os arquivos (Leitura e Escrita Binária)
+    FILE *entrada = fopen(arquivo_entrada, "rb");
+    if (entrada == NULL) {
+        printf("ERRO: Nao foi possivel abrir o arquivo de entrada.\n");
+        return 0;
+    }
+
+    FILE *saida = fopen(arquivo_saida, "wb");
+    if (saida == NULL) {
+        printf("ERRO: Nao foi possivel criar o arquivo de saida.\n");
+        fclose(entrada);
+        return 0;
+    }
+
+    // 2. GRAVAÇÃO DO CABEÇALHO (Metadados)
+    // Gravamos as 256 contagens (inteiros) no início do arquivo.
+    // Isso ocupará 256 * 4 = 1024 bytes (1 KB). É o "custo" do nosso dicionário.
+    fwrite(frequencias, sizeof(int), 256, saida);
+
+    // 3. COMPRESSÃO DE BITS
+    EscritorDeBits *escritor = criarEscritor(saida);
+    uint8_t byte;
+
+    // Lê o arquivo original byte por byte
+    while (fread(&byte, sizeof(uint8_t), 1, entrada) == 1) {
+        // Busca o código Huffman correspondente ao byte lido
+        char *codigo_bits = dicionario[byte];
+
+        // Se o arquivo original não corrompeu desde a leitura das frequências, o código existirá
+        if (codigo_bits != NULL) {
+            escreverCodigo(escritor, codigo_bits);
+        }
+    }
+
+    // 4. FINALIZAÇÃO
+    // Força a escrita de qualquer bit que ficou "preso" no último byte incompleto
+    finalizarEscritor(escritor);
+
+    // Fecha os arquivos
+    fclose(entrada);
+    fclose(saida);
+
+    return 1;
+}
