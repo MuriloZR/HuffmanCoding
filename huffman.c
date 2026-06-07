@@ -88,7 +88,6 @@ static int acharIndiceCaractere(char c, char* mapeamento, int tamanho_mapeamento
     return -1; // Caractere não encontrado
 }
 
-// Função que transforma a string original na sua versão codificada em bits
 char* codificarString(char* texto_original, char* caracteres_unicos, char** codigos_huffman, int tamanho_mapeamento) {
     int tamanho_texto = strlen(texto_original);
     int tamanho_total_bits = 0;
@@ -118,7 +117,6 @@ char* codificarString(char* texto_original, char* caracteres_unicos, char** codi
     return string_codificada;
 }
 
-// Transforma a string binária de volta para o texto original usando o dicionário
 char* decodificarString(char* texto_codificado, char* caracteres_unicos, char** codigos_huffman, int tamanho_mapeamento) {
     int tamanho_codificado = strlen(texto_codificado);
 

@@ -1,17 +1,17 @@
 #include "comprime.h"
 #include "huffman.h"
 
-// Inicia o escritor associado a um arquivo já aberto para escrita binária ("wb")
-EscritorDeBits* criarEscritor(FILE *arq) {
-    EscritorDeBits *escritor = (EscritorDeBits*)malloc(sizeof(EscritorDeBits));
-    escritor->arquivo = arq;
-    escritor->byte = 0;
-    escritor->contagem_bits = 0;
-    return escritor;
+GerenciadorDeBits* criarGerenciador(FILE *arq) {
+    GerenciadorDeBits *gerenciador = (GerenciadorDeBits*)malloc(sizeof(GerenciadorDeBits));
+    gerenciador->arquivo = arq;
+    gerenciador->byte = 0;
+    gerenciador->contagem_bits = 0;
+    return gerenciador;
 }
 
-// Função que converte uma string "0101" em bits reais e escreve no arquivo
-void escreverCodigo(EscritorDeBits *escritor, const char *codigo_huffman) {
+// COMPRESSÃO
+
+void escreverCodigo(GerenciadorDeBits *escritor, const char *codigo_huffman) {
     int i = 0;
 
     // Percorre cada '0' ou '1' da string
@@ -38,8 +38,7 @@ void escreverCodigo(EscritorDeBits *escritor, const char *codigo_huffman) {
     }
 }
 
-// Grava qualquer bit que tenha sobrado no buffer e libera o escritor
-void finalizarEscritor(EscritorDeBits *escritor) {
+void finalizarEscritor(GerenciadorDeBits *escritor) {
     // Se ainda tem bits aguardando para serem escritos
     if (escritor->contagem_bits > 0) {
         // Precisamos empurrar esses bits para a esquerda para que fiquem
@@ -57,10 +56,6 @@ void finalizarEscritor(EscritorDeBits *escritor) {
     free(escritor);
 }
 
-// Certifique-se de ter incluído <stdint.h> no topo do arquivo
-// #include <stdint.h>
-
-// Preenche um array de 256 posições com a frequência de cada byte no arquivo
 int calcularFrequencias(const char *nome_arquivo, int *frequencias) {
     // Zera todas as 256 posições primeiro
     for (int i = 0; i < DICT_SIZE; i++) {
@@ -68,29 +63,27 @@ int calcularFrequencias(const char *nome_arquivo, int *frequencias) {
     }
 
     // Abrimos em "rb" (read binary).
-    // É crucial usar "rb" mesmo para .txt para que o SO não altere os bytes de quebra de linha internamente.
+    // É crucial usar "rb" para que o SO não altere os bytes de quebra de linha internamente.
     FILE *arq = fopen(nome_arquivo, "rb");
     if (arq == NULL) {
         printf("ERRO: Nao foi possivel abrir o arquivo '%s' para leitura.\n", nome_arquivo);
-        return 0; // Retorna 0 indicando falha
+        return 0;
     }
 
     uint8_t byte;
-    // fread retorna o número de blocos lidos. Se for 1, lemos um byte com sucesso.
     while (fread(&byte, sizeof(uint8_t), 1, arq) == 1) {
-        // O próprio valor do byte (0 a 255) serve como índice do array!
         frequencias[byte]++;
     }
 
     fclose(arq);
-    return 1; // Retorna 1 indicando sucesso
+    return 1;
 }
 
 static par make_par(int dado, int cont) {
     return (par){dado, cont};
 }
 
-// Função preOrder atualizada para mapeamento direto na tabela ASCII/Byte
+// Função preOrder para mapeamento direto na tabela ASCII/Byte
 void preOrder_comp(No root, char** ans, char* curr, int depth) {
     if (root == NULL) return;
 
@@ -119,7 +112,6 @@ void preOrder_comp(No root, char** ans, char* curr, int depth) {
     preOrder_comp(root->dir, ans, curr, depth + 1);
 }
 
-// Nova versão que recebe a tabela de 256 posições
 char** construirDicionario(int *frequencias) {
     int bytes_unicos = 0;
     for (int i = 0; i < DICT_SIZE; i++) {
@@ -140,7 +132,7 @@ char** construirDicionario(int *frequencias) {
 
     // Tratamento para caso o arquivo tenha apenas 1 tipo de byte repetido
     if (bytes_unicos == 1) {
-        char** ans = (char**)calloc(DICT_SIZE, sizeof(char*)); // calloc zera tudo (preenche com NULL)
+        char** ans = (char**)calloc(DICT_SIZE, sizeof(char*));
         No root = extractMin(h);
 
         ans[root->dados.dado] = (char*)malloc(2 * sizeof(char));
@@ -162,28 +154,21 @@ char** construirDicionario(int *frequencias) {
 
     No root = extractMin(h);
 
-    // Aloca o array de 256 posições preenchido com NULLs
     char** ans = (char**)calloc(DICT_SIZE, sizeof(char*));
     char* curr = (char*)malloc((DICT_SIZE + 1) * sizeof(char)); // Pior caso de profundidade é 256 + 1 (\0)
 
-    // Percorre a árvore
     preOrder_comp(root, ans, curr, 0);
 
     // Limpeza
     free(curr);
     free(h->harr);
     free(h);
-
-    // Liberação da árvore (DICA: Em uma implementação completa,
-    // você precisará de uma função recursiva 'freeTree(root)' para evitar vazamento de memória aqui)
     free_rec(root);
 
     return ans;
 }
 
-// Lê o arquivo original e gera a versão comprimida (.huff)
 int comprimirArquivo(const char *arquivo_entrada, const char *arquivo_saida, char **dicionario, int *frequencias) {
-    // 1. Abre os arquivos (Leitura e Escrita Binária)
     FILE *entrada = fopen(arquivo_entrada, "rb");
     if (entrada == NULL) {
         printf("ERRO: Nao foi possivel abrir o arquivo de entrada.\n");
@@ -197,13 +182,11 @@ int comprimirArquivo(const char *arquivo_entrada, const char *arquivo_saida, cha
         return 0;
     }
 
-    // 2. GRAVAÇÃO DO CABEÇALHO (Metadados)
-    // Gravamos as 256 contagens (inteiros) no início do arquivo.
-    // Isso ocupará 256 * 4 = 1024 bytes (1 KB). É o "custo" do nosso dicionário.
+    // Cabeçalho (Metadados)
     fwrite(frequencias, sizeof(int), 256, saida);
 
-    // 3. COMPRESSÃO DE BITS
-    EscritorDeBits *escritor = criarEscritor(saida);
+    // Compressão
+    GerenciadorDeBits *escritor = criarGerenciador(saida);
     uint8_t byte;
 
     // Lê o arquivo original byte por byte
@@ -217,13 +200,140 @@ int comprimirArquivo(const char *arquivo_entrada, const char *arquivo_saida, cha
         }
     }
 
-    // 4. FINALIZAÇÃO
     // Força a escrita de qualquer bit que ficou "preso" no último byte incompleto
     finalizarEscritor(escritor);
 
-    // Fecha os arquivos
     fclose(entrada);
     fclose(saida);
+
+    return 1;
+}
+
+// DESCOMPRESSÃO
+
+int lerBit(GerenciadorDeBits *gerenciador) {
+    // Se esgotamos os bits do buffer atual, lemos o próximo byte do disco
+    if (gerenciador->contagem_bits == 0) {
+        if (fread(&(gerenciador->byte), sizeof(uint8_t), 1, gerenciador->arquivo) != 1) {
+            return -1; // Fim do arquivo (EOF)
+        }
+        gerenciador->contagem_bits = 8;
+    }
+
+    // Extrai o bit mais à esquerda
+    int bit = (gerenciador->byte >> 7) & 1;
+
+    // Empurra o byte 1 casa para a esquerda, preparando o próximo bit
+    gerenciador->byte = gerenciador->byte << 1;
+
+    gerenciador->contagem_bits--;
+
+    return bit;
+}
+
+No construirArvore(int *frequencias) {
+    int bytes_unicos = 0;
+    for (int i = 0; i < 256; i++) {
+        if (frequencias[i] > 0) bytes_unicos++;
+    }
+
+    if (bytes_unicos == 0) return NULL;
+
+    Heap h = createMinHeap(bytes_unicos);
+    for (int i = 0; i < 256; i++) {
+        if (frequencias[i] > 0) {
+            No tmp = create_no(make_par(i, frequencias[i]), i);
+            insertKey(h, tmp);
+        }
+    }
+
+    // Se o arquivo original só tinha 1 caractere repetido várias vezes
+    if (bytes_unicos == 1) {
+        No root = extractMin(h);
+        // Criamos um nó falso acima dele para permitir que a descida pela esquerda ('0') funcione
+        No dummy = create_no(make_par(-1, root->dados.cont), -1);
+        dummy->esq = root;
+        free(h->harr); free(h);
+        return dummy;
+    }
+
+    // Constrói a Árvore de Huffman unindo os menores
+    while (h->heap_size >= 2) {
+        No l = extractMin(h);
+        No r = extractMin(h);
+        No newNode = create_internal(l, r);
+        insertKey(h, newNode);
+    }
+
+    No root = extractMin(h);
+
+    free(h->harr);
+    free(h);
+    return root;
+}
+
+int descomprimirArquivo(const char *arquivo_comprimido, const char *arquivo_saida) {
+    FILE *entrada = fopen(arquivo_comprimido, "rb");
+    if (entrada == NULL) return 0;
+
+    FILE *saida = fopen(arquivo_saida, "wb");
+    if (saida == NULL) {
+        fclose(entrada);
+        return 0;
+    }
+
+    // Leitura do cabeçalho
+    int frequencias[256];
+    if (fread(frequencias, sizeof(int), 256, entrada) != 256) {
+        printf("ERRO: Arquivo corrompido.\n");
+        return 0;
+    }
+
+    // Cálculo dos bytes
+    int total_bytes_originais = 0;
+    for (int i = 0; i < 256; i++) {
+        total_bytes_originais += frequencias[i];
+    }
+
+    // Reconstrução da árvore
+    No root = construirArvore(frequencias);
+    if (root == NULL) return 0;
+
+    GerenciadorDeBits *gerenciador = criarGerenciador(entrada);
+    No atual = root;
+    int bytes_decodificados = 0;
+
+    // Navega pela árvore bit a bit
+    while (bytes_decodificados < total_bytes_originais) {
+        int bit = lerBit(gerenciador);
+        if (bit == -1) break;
+
+        // Desce na árvore
+        if (bit == 0) {
+            atual = atual->esq;
+        } else {
+            atual = atual->dir;
+        }
+
+        // Se chegamos em um nó folha (um byte original)
+        if (atual->esq == NULL && atual->dir == NULL) {
+            // Extrai o byte original
+            uint8_t byte_original = atual->dados.dado;
+
+            // Grava no arquivo
+            fwrite(&byte_original, sizeof(uint8_t), 1, saida);
+
+            // Volta para a raiz da árvore para começar a decifrar a próxima letra
+            atual = root;
+
+            bytes_decodificados++;
+        }
+    }
+
+    free(gerenciador);
+    fclose(entrada);
+    fclose(saida);
+    free_rec(root);
 
     return 1;
 }
