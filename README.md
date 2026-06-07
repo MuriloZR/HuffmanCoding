@@ -17,6 +17,34 @@ O objetivo deste projeto é demonstrar a aplicação prática de Estruturas de D
 * **Cabeçalho Customizado:** O arquivo comprimido carrega sua própria tabela de frequências para permitir a reconstrução da árvore em qualquer máquina.
 * **Modo Demonstração:** Permite visualizar a árvore gerada e a codificação de uma string diretamente no terminal, ideal para fins educacionais.
 
+## Como o Algoritmo Funciona (Fluxo Lógico)
+
+O processo de compressão e descompressão segue uma arquitetura rigorosa de passos para garantir que nenhum dado seja perdido.
+
+### 📉 O Processo de Compressão
+
+1. **Mapeamento de Frequências:** O arquivo original é lido do início ao fim, byte a byte. O algoritmo utiliza um array de 256 posições (representando todos os valores possíveis de um byte, de 0 a 255) para contar quantas vezes cada byte aparece.
+2. **Fila de Prioridade (Min-Heap):** Cada byte que apareceu no arquivo é transformado em um nó folha e inserido em uma Min-Heap, ordenado pela sua frequência (bytes mais raros ficam no topo).
+3. **Construção da Árvore de Huffman:** O algoritmo remove os dois nós de menor frequência da Heap e cria um nó "pai" unindo-os. A frequência do pai é a soma das frequências dos filhos. Esse pai volta para a Heap. O processo se repete até sobrar apenas um nó: a raiz da árvore.
+4. **Geração do Dicionário Binário:** A árvore é percorrida da raiz às folhas. Navegar para a esquerda adiciona um bit `0`, para a direita um bit `1`. Quando uma folha é alcançada, o caminho percorrido se torna o "código" daquele byte. Bytes frequentes acabam no topo da árvore (códigos curtos), enquanto os raros ficam no fundo (códigos longos).
+5. **Gravação do Arquivo (.huff):**
+   * **Cabeçalho:** As 256 frequências são gravadas no início do arquivo de saída.
+   * **Corpo:** O arquivo original é lido novamente. Para cada byte lido, o algoritmo busca seu novo código em zeros e uns.
+   * **Operações Bitwise:** Como o C não permite salvar "meio byte", usamos um *Buffer de 8 bits* e operadores de deslocamento (`<<`, `>>`, `|`) para empacotar os bits individuais. Quando o buffer enche, ele é gravado no disco como 1 byte real.
+
+---
+
+### 📈 O Processo de Descompressão
+
+1. **Leitura do Cabeçalho:** O algoritmo lê os primeiros 256 inteiros do arquivo `.huff`. Isso permite saber exatamente a frequência original de cada byte e calcular a quantidade exata de bytes que o arquivo original possuía.
+2. **Reconstrução da Árvore:** Usando o array de frequências lido no passo anterior, o algoritmo refaz os passos de montagem da Min-Heap e da Árvore de Huffman. O resultado é uma árvore matematicamente idêntica à que foi usada na compressão.
+3. **Leitura Bit a Bit:** O restante do arquivo comprimido é lido. Usando máscaras de bits (`&`), extraímos os bits individualmente, um a um.
+4. **Navegação e Extração:**
+   * O algoritmo começa na raiz da árvore.
+   * Se ler `0`, desce para o nó da esquerda. Se ler `1`, desce para a direita.
+   * Quando atinge um nó folha (sem filhos), o byte original foi encontrado! O byte é gravado no arquivo de destino e o ponteiro volta para a raiz da árvore para iniciar a decodificação do próximo caractere.
+   * Esse processo continua até que o total de bytes restaurados seja igual ao tamanho do arquivo original.
+
 ---
 
 ## Como Compilar e Usar
