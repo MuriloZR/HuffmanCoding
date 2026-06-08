@@ -1,4 +1,5 @@
 #include "comprime.h"
+#include "huffman.h"
 
 // Retorna o tamanho do arquivo em bytes, ou -1 em caso de erro
 long obterTamanhoArquivo(const char *nome_arquivo) {
@@ -49,44 +50,55 @@ int main(int argc, char *argv[]) {
         char *texto = argv[2];
         printf("\nTexto Original : '%s'\n", texto);
 
-        // Calcula frequencias direto da string
+        // Calcula frequencias globais (0 a 255)
         int frequencias[256] = {0};
         for (int i = 0; texto[i] != '\0'; i++) {
-            // Converte para unsigned char para evitar índices negativos com acentos
             frequencias[(unsigned char)texto[i]]++;
         }
 
-        // Constrói a árvore/dicionário
-        char **dicionario = construirDicionario(frequencias);
-        if (dicionario == NULL) {
-            printf("Erro: String vazia.\n");
-            return 1;
+        // Prepara os arrays compactos exigidos pela função huffmanCodes
+        int n = 0;
+        for (int i = 0; i < 256; i++) {
+            if (frequencias[i] > 0) n++;
         }
 
-        // Printa o Dicionário Gerado
-        printf("\n--- Dicionario de Codigos ---\n");
+        char *caracteres_unicos = (char*)malloc(n * sizeof(char));
+        int *freq_compacta = (int*)malloc(n * sizeof(int));
+
+        int idx = 0;
         for (int i = 0; i < 256; i++) {
-            if (frequencias[i] > 0 && dicionario[i] != NULL) {
-                // Se for o caractere de espaço, printa "[espaco]" para ficar legível
-                if (i == ' ')
-                    printf("Caractere [espaco] : %s\n", dicionario[i]);
-                else
-                    printf("Caractere '%c'      : %s\n", i, dicionario[i]);
+            if (frequencias[i] > 0) {
+                caracteres_unicos[idx] = (char)i;
+                freq_compacta[idx] = frequencias[i];
+                idx++;
             }
         }
 
-        // Printa a String Codificada
-        printf("\n--- Resultado Codificado ---\n");
-        for (int i = 0; texto[i] != '\0'; i++) {
-            printf("%s", dicionario[(unsigned char)texto[i]]);
-        }
-        printf("\n\n");
+        int returnSize = 0;
+        char **codigos_huffman = huffmanCodes(caracteres_unicos, freq_compacta, n, &returnSize);
 
-        // Limpeza de memória
-        for (int i = 0; i < 256; i++) {
-            if (dicionario[i]) free(dicionario[i]);
+        // Printa o Dicionário Gerado
+        printf("\n--- Dicionario de Codigos ---\n");
+        for (int i = 0; i < returnSize; i++) {
+            if (caracteres_unicos[i] == ' ')
+                printf("Caractere [espaco] : %s\n", codigos_huffman[i]);
+            else
+                printf("Caractere '%c'      : %s\n", caracteres_unicos[i], codigos_huffman[i]);
         }
-        free(dicionario);
+
+        printf("\n--- Resultado Codificado ---\n");
+        char *resultado_bits = codificarString(texto, caracteres_unicos, codigos_huffman, returnSize);
+        if (resultado_bits != NULL) {
+            printf("%s\n\n", resultado_bits);
+            free(resultado_bits);
+        }
+
+        for (int i = 0; i < returnSize; i++) {
+            free(codigos_huffman[i]);
+        }
+        free(codigos_huffman);
+        free(caracteres_unicos);
+        free(freq_compacta);
 
         return 0;
     }
@@ -109,7 +121,7 @@ int main(int argc, char *argv[]) {
         int frequencias[256];
         if (!calcularFrequencias(arquivo_origem, frequencias)) return 1;
 
-        char **dicionario = construirDicionario(frequencias);
+        CodigoHuffman *dicionario = construirDicionario(frequencias);
         if (dicionario == NULL) {
             printf("ERRO: O arquivo origem esta vazio ou houve falha.\n");
             return 1;
@@ -140,11 +152,7 @@ int main(int argc, char *argv[]) {
             }
         }
 
-        for (int i = 0; i < 256; i++) {
-            if (dicionario[i]) free(dicionario[i]);
-        }
         free(dicionario);
-
     } else if (strcmp(flag, "-d") == 0) {
         printf("Iniciando descompressao de '%s' para '%s'...\n", arquivo_origem, arquivo_destino);
 
