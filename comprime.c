@@ -9,6 +9,24 @@ GerenciadorDeBits* criarGerenciador(FILE *arq) {
     return gerenciador;
 }
 
+int64_t obterTamanhoArquivo(const char *nome_arquivo) {
+    FILE *arq = fopen(nome_arquivo, "rb");
+    if (arq == NULL) return -1;
+
+    // Se estiver no Windows, usa as funções de 64 bits da Microsoft
+    // Se estiver no Linux/Mac, usa as funções padrão POSIX de 64 bits
+#ifdef _WIN32
+    _fseeki64(arq, 0, SEEK_END);
+    int64_t tamanho = _ftelli64(arq);
+#else
+    fseeko(arq, 0, SEEK_END);
+    int64_t tamanho = ftello(arq);
+#endif
+
+    fclose(arq);
+    return tamanho;
+}
+
 // COMPRESSÃO
 
 void escreverCodigo(GerenciadorDeBits *escritor, unsigned int codigo, int tamanho) {
@@ -38,7 +56,7 @@ void finalizarEscritor(GerenciadorDeBits *escritor) {
     free(escritor);
 }
 
-int calcularFrequencias(const char *nome_arquivo, int *frequencias) {
+int calcularFrequencias(const char *nome_arquivo, uint64_t *frequencias) {
     for (int i = 0; i < DICT_SIZE; i++) frequencias[i] = 0;
 
     FILE *arq = fopen(nome_arquivo, "rb");
@@ -79,7 +97,7 @@ void preencherDicionario(No root, unsigned int codigo_atual, int depth, CodigoHu
     preencherDicionario(root->dir, (codigo_atual << 1) | 1, depth + 1, dict);
 }
 
-CodigoHuffman* construirDicionario(int *frequencias) {
+CodigoHuffman* construirDicionario(uint64_t *frequencias) {
     int bytes_unicos = 0;
     for (int i = 0; i < DICT_SIZE; i++) {
         if (frequencias[i] > 0) bytes_unicos++;
@@ -125,14 +143,14 @@ CodigoHuffman* construirDicionario(int *frequencias) {
     return ans;
 }
 
-int comprimirArquivo(const char *arquivo_entrada, const char *arquivo_saida, CodigoHuffman *dicionario, int *frequencias) {
+int comprimirArquivo(const char *arquivo_entrada, const char *arquivo_saida, CodigoHuffman *dicionario, uint64_t *frequencias) {
     FILE *entrada = fopen(arquivo_entrada, "rb");
     if (entrada == NULL) return 0;
 
     FILE *saida = fopen(arquivo_saida, "wb");
     if (saida == NULL) { fclose(entrada); return 0; }
 
-    fwrite(frequencias, sizeof(int), 256, saida);
+    fwrite(frequencias, sizeof(uint64_t), 256, saida);
     GerenciadorDeBits *escritor = criarGerenciador(saida);
     uint8_t byte;
 
@@ -171,7 +189,7 @@ int lerBit(GerenciadorDeBits *gerenciador) {
     return bit;
 }
 
-No construirArvore(int *frequencias) {
+No construirArvore(uint64_t *frequencias) {
     int bytes_unicos = 0;
     for (int i = 0; i < 256; i++) {
         if (frequencias[i] > 0) bytes_unicos++;
@@ -223,14 +241,14 @@ int descomprimirArquivo(const char *arquivo_comprimido, const char *arquivo_said
     }
 
     // Leitura do cabeçalho
-    int frequencias[256];
-    if (fread(frequencias, sizeof(int), 256, entrada) != 256) {
+    uint64_t frequencias[256];
+    if (fread(frequencias, sizeof(uint64_t), 256, entrada) != 256) {
         printf("ERRO: Arquivo corrompido.\n");
         return 0;
     }
 
     // Cálculo dos bytes
-    int total_bytes_originais = 0;
+    uint64_t total_bytes_originais = 0;
     for (int i = 0; i < 256; i++) {
         total_bytes_originais += frequencias[i];
     }
@@ -241,7 +259,7 @@ int descomprimirArquivo(const char *arquivo_comprimido, const char *arquivo_said
 
     GerenciadorDeBits *gerenciador = criarGerenciador(entrada);
     No atual = root;
-    int bytes_decodificados = 0;
+    uint64_t bytes_decodificados = 0;
 
     // Navega pela árvore bit a bit
     while (bytes_decodificados < total_bytes_originais) {

@@ -1,21 +1,6 @@
 #include "comprime.h"
 #include "huffman.h"
 
-// Retorna o tamanho do arquivo em bytes, ou -1 em caso de erro
-long obterTamanhoArquivo(const char *nome_arquivo) {
-    FILE *arq = fopen(nome_arquivo, "rb");
-    if (arq == NULL) {
-        return -1;
-    }
-
-    fseek(arq, 0, SEEK_END);
-
-    long tamanho = ftell(arq);
-
-    fclose(arq);
-    return tamanho;
-}
-
 void imprimirAjuda(const char *nome_programa) {
     printf("==========================================\n");
     printf("         COMPRESSOR DE HUFFMAN            \n");
@@ -118,7 +103,7 @@ int main(int argc, char *argv[]) {
     if (strcmp(flag, "-c") == 0) {
         printf("Iniciando compressao de '%s' para '%s'...\n", arquivo_origem, arquivo_destino);
 
-        int frequencias[256];
+        uint64_t frequencias[256];
         if (!calcularFrequencias(arquivo_origem, frequencias)) return 1;
 
         CodigoHuffman *dicionario = construirDicionario(frequencias);
@@ -129,8 +114,8 @@ int main(int argc, char *argv[]) {
 
         if (comprimirArquivo(arquivo_origem, arquivo_destino, dicionario, frequencias)) {
             // Pega o tamanho dos dois arquivos
-            long tam_original = obterTamanhoArquivo(arquivo_origem);
-            long tam_comprimido = obterTamanhoArquivo(arquivo_destino);
+            uint64_t tam_original = obterTamanhoArquivo(arquivo_origem);
+            uint64_t tam_comprimido = obterTamanhoArquivo(arquivo_destino);
 
             printf("\n>> Sucesso! Arquivo comprimido gerado.\n");
 
